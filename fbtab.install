@@ -1,0 +1,43 @@
+<?php
+
+/**
+ * @file
+ * Provides install / uninstall schema information for fbcanvas.module
+ */
+
+
+/**
+ * Implements hook_schema().
+ */
+function fbtab_schema() {
+  return array(
+    'fbtab_users' => array(
+      'fields' => array(
+        'uid' => array(
+          'type' => 'int',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+          'default' => 0,
+        ),
+        'fbid' => array(
+          'type' => 'int',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+          'default' => 0,
+          'size' => 'big',
+        ),
+      ),
+      'primary key' => array('fbid'),
+      'indexes' => array(
+        'uid_fbid' => array('uid', 'fbid'),
+      ),
+    ),
+  );
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function fbtab_uninstall() {
+
+}

@@ -1,0 +1,167 @@
+<?php
+
+/**
+ * @file
+ * Provides integrations with Facebook Tab Applications
+ */
+
+require_once dirname(__FILE__) . '/fbtab.inc';
+
+/**
+ * Implements hook_boot().
+ */
+function fbtab_boot() {
+  $GLOBALS['fbtab_app'] = fbtab_app();
+}
+
+/**
+ * Implements hook_init().
+ */
+function fbtab_init() {
+  global $fbtab_app;
+
+  // Allow Cookies to be set in Internet Explorer through iFrames.
+  header('p3p: CP="NOI ADM DEV PSAi COM NAV OUR OTR STP IND DEM"');
+
+  // Require authorization to use application in tab mode.
+  fbtab_authorize();
+
+  // Add javascript.
+  //drupal_add_js(drupal_get_path('module', 'fbtab') . '/fbtab.js');
+
+  // Debug.
+  //dpm($fbtab_app);
+}
+
+/**
+ * Implements hook_menu().
+ */
+function fbtab_menu() {
+  return array(
+    'fbtab/channel' => array(
+      'page callback' => 'fbtab_channel',
+      'access callback' => TRUE,
+    ),
+  );
+}
+
+/**
+ * Implements hook_theme().
+ */
+function fbtab_theme() {
+  return array(
+    'fbtab_root' => array(
+      'variables' => array('app' => NULL),
+      'template' => 'fbtab-root',
+    ),
+  );
+}
+
+/**
+ * Implements hook_page_alter().
+ */
+function fbtab_page_alter(&$page) {
+  $page['page_bottom']['fbtab'] = array(
+    '#type' => 'markup',
+    '#markup' => theme('fbtab_root', array('app' => $GLOBALS['fbtab_app'])),
+  );
+}
+
+/**
+ * Implements hook_form_alter().
+ */
+function fbtab_form_alter(&$form, &$form_state, $form_id) {
+  global $fbtab_app;
+
+  // Link accounts.
+  if ( $form_id == 'user_register_form' && $fbtab_app->link_accounts && $fbtab_app->request ) {
+    if ( isset($fbtab_app->request['user_id']) && !empty($fbtab_app->request['user_id']) ) {
+
+      // Account password isn't required for accounts created through Facebook.
+      if ( $fbtab_app->link_accounts_pass_bypass ) {
+        $form['account']['pass']['#required'] = FALSE;
+        $form['account']['pass']['#access'] = FALSE;
+      }
+
+      // Pass along Facebook user id.
+      $form['fbtab_fbid'] = array(
+        '#type' => 'hidden',
+        '#value' => $fbtab_app->request['user_id'],
+      );
+
+    }
+  }
+}
+
+/**
+ * Implements hook_language_negotiation_info().
+ */
+function fbtab_language_negotiation_info() {
+  return array(
+    'fbtab_language_facebook' => array(
+      'callbacks' => array('language' => 'fbtab_language_from_facebook'),
+      'file' => drupal_get_path('module', 'fbtab') . '/fbtab.module',
+      'weight' => 10,
+      'name' => t('Facebook Locale'),
+      'description' => t('Determine the language from a Facebook Signed Request.'),
+    ),
+  );
+}
+
+/**
+ * Identify language from a Facebook Signed Request.
+ *
+ * @param $languages
+ *   An array of valid language objects.
+ * @return
+ *   A valid language code on success, FALSE otherwise.
+ */
+function fbtab_language_from_facebook($languages) {
+  global $fbtab_app;
+
+  if ( $fbtab_app->request && isset($fbtab_app->request['user']['locale']) ) {
+    return fbtab_language_map($fbtab_app->request['user']['locale']);
+  }
+
+  return FALSE;
+}
+
+
+/**
+ * Implements hook_user_insert().
+ */
+function fbtab_user_insert(&$edit, $account, $category) {
+  global $fbtab_app;
+
+  // Link accounts.
+  if ( $fbtab_app->link_accounts && isset($edit['fbtab_fbid']) ) {
+    db_insert('fbtab_users')
+      ->fields(array(
+        'uid' => $account->uid,
+        'fbid' => $edit['fbtab_fbid'],
+      ))
+      ->execute();
+  }
+}
+
+/**
+ * Implements hook_user_delete().
+ */
+function fbtab_user_delete($account) {
+  db_delete('fbtab_users')
+    ->condition('uid', $account->uid)
+    ->execute();
+}
+
+/**
+ * Page Callback: Channel File
+ */
+function fbtab_channel() {
+  $cache_expire = 60*60*24*365;
+
+  header("Pragma: public");
+  header("Cache-Control: max-age=" . $cache_expire);
+  header('Expires: ' . gmdate('D, d M Y H:i:s', time() + $cache_expire) . ' GMT');
+
+  print '<script src="//connect.facebook.net/en_US/all.js"></script>';
+}
