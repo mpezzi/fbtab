@@ -83,6 +83,7 @@ function fbtab_authorize($redirect_uri = NULL) {
       if ( $user = fbtab_user_load_by_fbid($fbtab_app->request['user_id']) ) {
         if ( fbtab_user_authenticate($user) ) {
           watchdog('fbtab', 'Successfully authenticated in @name with @fbid', array('@name' => $user->name, '@fbid' => $fbtab_app->request['user_id']), WATCHDOG_NOTICE, l('view', 'user/' . $user->uid));
+          drupal_goto('<front>');
         }
         else {
           watchdog('fbtab', 'Failed to authenticate @name with @fbid', array('@name' => $user->name, '@fbid' => $fbtab_app->request['user_id']), WATCHDOG_WARNING, l('view', 'user/' . $user->uid));
