@@ -60,7 +60,7 @@ function fbtab_signed_request() {
  * Forces user to authorize application.
  */
 function fbtab_authorize($redirect_uri = NULL) {
-  global $fbtab_app;
+  global $fbtab_app, $user;
 
   // Default redirect to fbtab_auth_redirect
   if ( is_null($redirect_uri) ) {
@@ -77,31 +77,55 @@ function fbtab_authorize($redirect_uri = NULL) {
     drupal_add_js("top.location.href = '" . $auth_url . "'", 'inline');
   }
 
-  // @TODO: Link accounts.
-  if ( !user_is_logged_in() && $fbtab_app->link_accounts && $fbtab_app->request ) {
+  // Link accounts.
+  if ( $fbtab_app->link_accounts && $fbtab_app->request ) {
     if ( isset($fbtab_app->request['user_id']) && !empty($fbtab_app->request['user_id']) ) {
-      if ( $user = fbtab_user_load_by_fbid($fbtab_app->request['user_id']) ) {
-        if ( fbtab_user_authenticate($user) ) {
-          watchdog('fbtab', 'Successfully authenticated in @name with @fbid', array('@name' => $user->name, '@fbid' => $fbtab_app->request['user_id']), WATCHDOG_NOTICE, l('view', 'user/' . $user->uid));
-          drupal_goto('<front>');
-        }
-        else {
-          watchdog('fbtab', 'Failed to authenticate @name with @fbid', array('@name' => $user->name, '@fbid' => $fbtab_app->request['user_id']), WATCHDOG_WARNING, l('view', 'user/' . $user->uid));
+
+      // User is anonymous, look of a fbid in the database.
+      if ( !user_is_logged_in() ) {
+        if ( $account = fbtab_user_load_by_fbid($fbtab_app->request['user_id']) ) {
+          if ( fbtab_user_authenticate($account) ) {
+            watchdog('fbtab', 'Successfully authenticated in @name with @fbid', array('@name' => $account->name, '@fbid' => $fbtab_app->request['user_id']), WATCHDOG_NOTICE, l('view', 'user/' . $account->uid));
+            drupal_goto('<front>');
+          }
+          else {
+            watchdog('fbtab', 'Failed to authenticate @name with @fbid', array('@name' => $account->name, '@fbid' => $fbtab_app->request['user_id']), WATCHDOG_WARNING, l('view', 'user/' . $account->uid));
+          }
         }
       }
+      // User is logged in, ensure fbid matches users fbid, if not then log them out for security.
+      // @NOTE: Skip if on logout page to prevent recursion.
+      elseif ( arg(0) != 'user' && arg(1) != 'logout' ) {
+        $uid = fbtab_user_uid_by_fbid($fbtab_app->request['user_id']);
+
+        if ( $uid != $user->uid ) {
+          watchdog('fbtab', 'Logged out @name because fbid (@fbid) did not match.', array('@name' => $user->name, '@fbid' => $fbtab_app->request['user_id']), WATCHDOG_WARNING, l('view', 'user/' . $user->uid));
+          drupal_goto('user/logout');
+        }
+      }
+
     }
   }
+}
+
+/**
+ * Find a uid by Facebook User ID.
+ */
+function fbtab_user_uid_by_fbid($fbid) {
+  $uid = db_select('fbtab_users', 'f')
+    ->fields('f', array('uid'))
+    ->condition('fbid', $fbid)
+    ->execute()
+    ->fetchField();
+
+  return $uid ? $uid : FALSE;
 }
 
 /**
  * Load User by Facebook User ID.
  */
 function fbtab_user_load_by_fbid($fbid) {
-  $uid = db_select('fbtab_users', 'f')
-    ->fields('f', array('uid'))
-    ->condition('fbid', $fbid)
-    ->execute()
-    ->fetchField();
+  $uid = fbtab_user_uid_by_fbid($fbid);
 
   return $uid ? user_load($uid) : FALSE;
 }
