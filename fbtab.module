@@ -126,6 +126,15 @@ function fbtab_language_from_facebook($languages) {
   return FALSE;
 }
 
+/**
+ * Implements hook_user_load().
+ */
+function fbtab_user_load($users) {
+  $result = db_query("SELECT * FROM {fbtab_users} WHERE uid IN (:uids)", array(':uids' => array_keys($users)));
+  foreach ( $result as $fbtab_user ) {
+    $users[$fbtab_user->uid]->fbtab_fbid = $fbtab_user->fbid;
+  }
+}
 
 /**
  * Implements hook_user_insert().
